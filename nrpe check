@@ -1,0 +1,191 @@
+
+#!/usr/bin/env perl
+
+use strict;
+use Getopt::Long;
+
+my $device = '';
+
+my $health_warning = 100;
+my $health_critical = 80;
+
+my $performance_warning = 100;
+my $performance_critical = 80;
+
+my $temperature_warning = 40;
+my $temperature_critical = 50;
+
+GetOptions (
+    'device=s' => \$device,
+    'd=s' => \$device,
+    'health_warning=s' => \$health_warning,
+    'hw=s' => \$health_warning,
+    'health_critical=s' => \$health_critical,
+    'hc=s' => \$health_critical,
+    'performance_warning=s' => \$performance_warning,
+    'pw=s' => \$performance_warning,
+    'performance_critical=s' => \$performance_critical,
+    'pc=s' => \$performance_critical,
+    'temperature_warning=s' => \$temperature_warning,
+    'pw=s' => \$temperature_warning,
+    'temperature_critical=s' => \$temperature_critical,
+    'pc=s' => \$temperature_critical,
+    'help' => sub { &usage() } );
+
+
+if( $device eq '' ){
+        print( "No device name given.\n" );
+        exit 2;
+}
+
+my $output = `sudo /usr/local/bin/HDSentinel`;
+
+if( $output eq '' ){
+        print( "Could not get HDSentinel output.\n" );
+        exit 2;
+}
+
+my @lines = split( /\n/, $output );
+my $line;
+
+my $health;
+my $performance;
+my $temperature;
+
+my $device_fields = 0;
+foreach $line (@lines){
+    $line = trim( $line );
+    if( $line eq '' ){
+    $device_fields = 0;
+    }
+    my @fields = split( /: /, $line );
+    if( $fields[1] eq $device ){
+	$device_fields = 1;
+    }
+    if( $device_fields ){
+	if( $line =~ /Health(.+?)([0-9]+)/ ){
+	    $health = $2;
+	}
+	if( $line =~ /Performance(.+?)([0-9]+)/ ){
+	    $performance = $2;
+	}
+	if( $line =~ /Temperature(.+?)([0-9]+)/ ){
+	    $temperature = $2;
+	}
+    }
+}
+
+my $health_output = 0;
+my $performance_output = 0;
+my $temperature_output = 0;
+my $text = '';
+
+if( $health < $health_critical ){
+    $health_output = 2;
+    $text = 'Health ('.$health.'%) is lower than critical level ('.$health_critical.'%)';
+}elsif( $health < $health_warning ){
+    $health_output = 1;
+    $text = 'Health ('.$health.'%) is lower than warning level ('.$health_warning.'%)';
+}else{
+    $text = 'Health OK';
+}
+
+$text .= ' ';
+
+if( $performance < $performance_critical ){
+    $performance_output = 2;
+    $text .= 'Performance ('.$performance.'%) is lower than critical level ('.$performance_critical.'%)';
+}elsif( $performance < $performance_warning ){
+    $performance_output = 1;
+    $text .= 'Performance ('.$performance.'%) is lower than warning level ('.$performance_warning.'%)';
+}else{
+    $text .= 'Performance OK';
+}
+
+$text .= ' ';
+
+if( $temperature > $temperature_critical ){
+    $temperature_output = 2;
+    $text .= 'temperature ('.$temperature.') is higher than critical level ('.$temperature_critical.'%)';
+}elsif( $temperature > $temperature_warning ){
+    $temperature_output = 1;
+    $text .= 'temperature ('.$temperature.') is higher than warning level ('.$temperature_warning.'%)';
+}else{
+    $text .= 'Temperature OK';
+}
+
+my $output = max( $health_output, $performance_output, $temperature_output );
+
+if( $output eq 0 ){
+    print( 'OK '.$text );
+}elsif( $output eq 1 ){
+    print( 'WARNING '.$text );
+}elsif( $output eq 2 ){
+    print( 'ERROR '.$text );
+}
+
+print( '| health='.$health.';'.$health_warning.';'.$health_critical.';0;100' );
+print( '; performance='.$performance.';'.$performance_warning.';'.$performance_critical.';0;100' );
+print( '; temperature='.$temperature.';'.$temperature_warning.';'.$temperature_critical.'' );
+
+print( "\n" );
+
+exit( $output );
+
+#$health = $values{'Health'};
+#$performance = $values{'Performance'};
+
+#$health = (int) $health;
+
+#print($health);
+
+
+#print $output;
+
+sub usage() {
+    printf("
+Nagios SNMP check for Debian / Ubuntu package updates
+
+Author: AndrĂĄs GrĂŠpĂĄlyg <grepaly\@grepaly.hu> (c) 2012
+
+Usage: check-hdsentinel.pl [options]
+
+  --help                         Prints this message
+
+  -d=<file>       
+  --device=<file>                Device to check
+
+  -hw=<0-100>
+  --health-warning=<0-100>       Warning level for health percent
+  -hc=<0-100>
+  --health-critical=<0-100>      Critical level for health percent
+
+  -pw=<0-100>
+  --performance-warning=<0-100>  Warning level for performance percent
+  -pc=<0-100>
+  --performance-critical=<0-100> Critical level for performanceh percent
+
+  -tw=<celsius>
+  --temperature-warning=<celsius>  Warning level for temperature
+  -tc=<celsius>
+  --temperature-critical=<celsius> Critical level for temperature
+
+
+Return value (according to Nagios expectations):
+OK, WARNING, CRITICAL
+Performance data also printed.
+
+");
+    exit (1);
+}
+
+# Perl trim function to remove whitespace from the start and end of the string
+sub trim($)
+{
+    my $string = shift;
+    $string =~ s/^\s+//;
+    $string =~ s/\s+$//;
+    return $string;
+}
+
+sub max ($$) { $_[$_[0] < $_[1]] }
