@@ -1,0 +1,118 @@
+#!/bin/bash
+#
+# Small script to check services and to alert if a certain service
+# exceeds a certain CPU percentage. Be warned about my poor programming
+# skills. I do not assume any responsobility if this script doesn't 
+# work properly, creates false warnings or takes over the world!
+# 
+# cc-by-3.0 Michael Kesler
+# http://michaelkesler.net
+
+# This defines if you want to trigger a critical alert if the checked 
+# processes is not running at all!
+# 0 = NO NOTIFICATION; 1 = WARNING; 2 = CRITICAL
+
+STATE_NOPROCESS=2
+
+
+# Set States
+STATE_OK=0
+STATE_WARNING=1
+STATE_CRITICAL=2
+
+
+# Set help
+print_help () {
+	echo ""
+	echo "Usage: check_ps_cpu -w <warning> -c <critical> -p <process>"
+	echo ""
+	echo "This plugin checks ps for a specific running process and"
+	echo "compares the CPU usage against a set threshold."
+	echo ""
+	echo "<process> can be a full or part of a process name that you"
+	echo "want to monitor. If you do not specify a process name, the"
+	echo "check will fail. If the provided process name does not seem"
+	echo "to be running, the check will exit with status code 2."
+	echo ""
+	exit 0
+}
+
+# Read input
+case "$1" in
+
+	--help)
+		print_help
+		exit $STATE_OK
+		;;
+	-h)
+		print_help
+		exit $STATE_OK
+		;;
+esac
+
+WARNING=$2
+CRITICAL=$4
+PROCESS=$6
+
+
+# Lets get to work
+
+if [ $WARNING -lt $CRITICAL ] && [ $6 ]; 
+then
+        CHECK_PROCESS="$(/bin/ps -eo pcpu,comm,user,pid,time | sort -rnk1 | grep $PROCESS)"
+
+	if [ -n "$CHECK_PROCESS" ];
+	then
+
+
+# Output the check results on the command line
+
+#		echo "%CPU COMMAND USER PID TIME"
+#		echo $CHECK_PROCESS
+#		echo ""
+	
+
+# This is rather ugly, please do not read... ;)
+
+	 	declare -a CHECK_PROCESS_ARRAY
+		CHECK_PROCESS_ARRAY=($CHECK_PROCESS)
+		CHECK_PROCESS_CPU=${CHECK_PROCESS_ARRAY[0]}
+		CHECK_PROCESS_CPU_SHORT=${CHECK_PROCESS_CPU%.*}
+
+
+# Okay, it's getting less ugly again, you can resume reading my code...
+# Comparing the check results against the set thresholds
+
+		if [ $CHECK_PROCESS_CPU_SHORT -gt $CRITICAL ];
+		then
+			echo $CHECK_PROCESS_CPU_SHORT
+			echo $CHECK_PROCESS_CPU
+			echo "${CHECK_PROCESS_ARRAY[1]} is above critical threshold of $CRITICAL%: Current CPU usage ${CHECK_PROCESS_ARRAY[0]}%"
+			exit $STATE_CRITICAL
+		elif [ $CHECK_PROCESS_CPU_SHORT -gt $WARNING ]; 
+		then
+			echo "${CHECK_PROCESS_ARRAY[1]} is above warning threshold of $CRITICAL%: Current CPU usage ${CHECK_PROCESS_ARRAY[0]}%"
+			exit $STATE_WARNING
+		else
+			echo "No problems found: CPU usage of ${CHECK_PROCESS_ARRAY[1]} is at ${CHECK_PROCESS_ARRAY[0]}%"
+			exit $STATE_OK
+		fi
+
+
+# In case the checked service is not running, do the following
+
+	else
+	echo "Process $PROCESS does not seem to be running!"
+	exit $STATE_NOPROCESS	
+	fi
+			
+else
+
+
+# In case we received a wrong syntax, do the following
+
+        echo "Error: Please check your syntax!"
+	echo "Use 'check_ps_cpu --help' for help!"
+        exit $STATE_OK
+fi
+
